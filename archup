@@ -2,6 +2,8 @@
 [[ -z $ARCHUP_LOCAL ]] && ARCHUP_LOCAL=0
 [[ -z $ARCHUP_NO_NETWORK ]] && ARCHUP_NO_NETWORK=0
 [[ -z $ARCHUP_DAEMON ]] && ARCHUP_DAEMON=0
+[[ -z $ARCHUP_SYSUPGRADE ]] && ARCHUP_SYSUPGRADE=0
+[[ -z $ARCHUP_DOWNLOAD_TO_CACHE ]] && ARCHUP_DOWNLOAD_TO_CACHE=0
 [[ -z $ARCHUP_MACHINE_NAME ]] && ARCHUP_MACHINE_NAME=box
 PACKAGES=(systemd polkit)
 BINDS=()
@@ -21,6 +23,11 @@ usage()
     printf "                        Set PrivateNetwork to true to\n"
     printf "                        forbidden the container to access networks.\n"
     printf "  -d                    Run as daemon. Defaults to false.\n"
+    printf "  -u                    Upgrade host system beforehand.\n"
+    printf "                        Defaults to false. This is interactive.\n"
+    printf "                        Human is required even if run as daemon.\n"
+    printf "  -w                    Download databases and packages to the cache.\n"
+    printf "                        Defaults to false.\n"
     printf "  -M <machine-name>     Set machine name. Defaults to \"box\".\n"
     printf "  -b /<src>:/<dst>      Bind read-only mount. Multiple allowed.\n"
     printf "  -b +/<src>:/<dst>     Bind read-write mount. Multiple allowed.\n"
@@ -28,11 +35,13 @@ usage()
     printf "  -h                    Show help and quit.\n"
 }
 
-while getopts LNdM:b:i:h option; do
+while getopts LNduwM:b:i:h option; do
     case $option in
         L) ARCHUP_LOCAL=1 ;;
         N) ARCHUP_NO_NETWORK=1 ;;
         d) ARCHUP_DAEMON=1 ;;
+        u) ARCHUP_SYSUPGRADE=1 ;;
+        w) ARCHUP_DOWNLOAD_TO_CACHE=1 ;;
         M)
             if [[ -z $OPTARG ]]; then
                 >&2 printf "Machine name cannot be empty.\n"
@@ -119,11 +128,40 @@ fi
 printf "%s: %s\n" LOCAL "$ARCHUP_LOCAL"
 printf "%s: %s\n" NO_NETWORK "$ARCHUP_NO_NETWORK"
 printf "%s: %s\n" DAEMON "$ARCHUP_DAEMON"
+printf "%s: %s\n" SYSUPGRADE "$ARCHUP_SYSUPGRADE"
+printf "%s: %s\n" DOWNLOAD_TO_CACHE "$ARCHUP_DOWNLOAD_TO_CACHE"
 printf "%s: %s\n" MACHINE_NAME "$ARCHUP_MACHINE_NAME"
 printf "%s: %s\n" PACKAGES "${PACKAGES[*]}"
 printf "%s: %s\n" BINDS "${BINDS[*]}"
 printf "%s: %s\n" EXTRA_FLAGS "$extra_flags"
 printf "%s: %s\n" NSPAWN_FLAGS "$nspawn_flags"
+
+if [[ $ARCHUP_SYSUPGRADE != 0 ]]; then
+    printf "Upgrading system...\n"
+    systemd-run \
+        --collect \
+        --unit "archup_sysupgrade-$ARCHUP_MACHINE_NAME" \
+        -p RemoveIPC=1 \
+        -p SendSIGKILL=0 \
+        --pty \
+        /usr/bin/pacman -Syu || exit 1
+fi
+
+if [[ $ARCHUP_DOWNLOAD_TO_CACHE != 0 ]]; then
+    printf "Downloading required packages to the cache...\n"
+    systemd-run \
+        --collect \
+        --unit "archup_download_to_cache-$ARCHUP_MACHINE_NAME" \
+        -p PrivateTmp=1 \
+        -p RemoveIPC=1 \
+        -p ProtectSystem=full \
+        -p ProtectHome=1 \
+        -p SendSIGKILL=0 \
+        -p ReadWritePaths=/var/cache/pacman \
+        -p ReadWritePaths=/var/lib/pacman/sync \
+        --pty \
+        /usr/bin/pacman -Syw --noconfirm "${PACKAGES[@]}" || exit 1
+fi
 
 systemd-run \
     --collect \
