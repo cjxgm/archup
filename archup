@@ -46,8 +46,18 @@ while getopts LNdM:h option; do
     esac
 done
 shift $(($OPTIND - 1))
-
 ARCHUP_PACKAGES="$BASE_PACKAGES $ARCHUP_PACKAGES $*"
+
+if ! [[ -x /usr/bin/pacman ]]; then
+    printf "This program only works in Arch Linux."
+    exit 1
+fi
+
+if ! [[ -x /usr/bin/pacstrap ]]; then
+    printf "Please install arch-install-scripts with:\n"
+    printf "  # pacman -S arch-install-scripts\n"
+    exit 1
+fi
 
 printf "%s: %s\n" LOCAL "$ARCHUP_LOCAL"
 printf "%s: %s\n" NO_NETWORK "$ARCHUP_NO_NETWORK"
