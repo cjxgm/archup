@@ -10,6 +10,8 @@ usage()
 {
     printf "USAGE: %s [OPTIONS] [packages...]\n" "$0"
     printf "\n"
+    printf "Start an isolated Arch Linux environment on RAM.\n"
+    printf "\n"
     printf "OPTIONS:\n"
     printf "  -L                Local mode. Defaults to false.\n"
     printf "                    Use only local package databases and caches.\n"
