@@ -181,6 +181,8 @@ systemd-run \
     -p BindReadOnlyPaths=$src/setup:/opt/archup \
     -p ReadWritePaths=/var/cache/pacman \
     -p ReadWritePaths=/var/lib/pacman/sync \
+    -p InaccessiblePaths=-/etc/pacman.d/hooks \
+    -p InaccessiblePaths=-/usr/share/libalpm/hooks \
     -p ExecStop="/usr/bin/systemctl stop machine-\"$ARCHUP_MACHINE_NAME\".scope" \
     $extra_flags \
     /usr/bin/bash /opt/archup/setup.sh "$ARCHUP_MACHINE_NAME" "$nspawn_flags" "${PACKAGES[@]}"
