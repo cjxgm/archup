@@ -172,10 +172,11 @@ if [[ $ARCHUP_DOWNLOAD_TO_CACHE != 0 ]]; then
         -p ProtectSystem=full \
         -p ProtectHome=1 \
         -p SendSIGKILL=0 \
+        -p BindReadOnlyPaths=$src/pacman.conf:/etc/pacman.conf \
         -p ReadWritePaths=/var/cache/pacman \
-        -p ReadWritePaths=/var/lib/pacman/sync \
+        -p BindPaths=/var/lib/pacman/sync:/tmp/var/lib/pacman/sync \
         --pty \
-        /usr/bin/pacman -Syw --noconfirm "${PACKAGES[@]}" || exit 1
+        /usr/bin/pacstrap -c /tmp -w "${PACKAGES[@]}" || exit 1
 fi
 
 systemd-run \
