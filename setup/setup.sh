@@ -2,15 +2,19 @@
 set -e
 
 machine_name="$1"
-shift
-packages="$*"
+extra_flags="$2"
+shift 2
+packages="$@"
 
+printf "Installing packages...\n"
 pacstrap -c /tmp $packages
 
+printf "Setting up environment...\n"
 install -Dm 644 /opt/archup/autologin.conf \
     /tmp/usr/lib/systemd/system/console-getty.service.d/archup-autologin.conf
 useradd -R /tmp -md /archup archup
 usermod -R /tmp -s /usr/bin/nologin root
 
-exec systemd-nspawn -bD /tmp -M "$machine_name"
+printf "Starting container...\n"
+exec systemd-nspawn -D /tmp -M "$machine_name" $extra_flags
 

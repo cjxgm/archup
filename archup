@@ -3,37 +3,56 @@
 [[ -z $ARCHUP_NO_NETWORK ]] && ARCHUP_NO_NETWORK=0
 [[ -z $ARCHUP_DAEMON ]] && ARCHUP_DAEMON=0
 [[ -z $ARCHUP_MACHINE_NAME ]] && ARCHUP_MACHINE_NAME=box
-[[ -z $ARCHUP_PACKAGES ]] && ARCHUP_PACKAGES=""
-BASE_PACKAGES="systemd polkit"
+PACKAGES=(systemd polkit)
+BINDS=()
 
 usage()
 {
-    printf "USAGE: %s [OPTIONS] [packages...]\n" "$0"
+    printf "USAGE: %s [<OPTIONS>] [<command> [<args>...]]\n" "$0"
     printf "\n"
     printf "Start an isolated Arch Linux environment on RAM.\n"
     printf "\n"
+    printf "If there is no <command>, the container will be booted.\n"
+    printf "\n"
     printf "OPTIONS:\n"
-    printf "  -L                Local mode. Defaults to false.\n"
-    printf "                    Use only local package databases and caches.\n"
-    printf "  -N                Disable networking. Defaults to false.\n"
-    printf "                    Set PrivateNetwork to true to\n"
-    printf "                    forbidden the container to access networks.\n"
-    printf "  -d                Run as daemon. Defaults to false.\n"
-    printf "  -M machine-name   Set machine name. Defaults to \"box\".\n"
-    printf "  -h                Show help and quit.\n"
+    printf "  -L                    Local mode. Defaults to false.\n"
+    printf "                        Use only local package databases and caches.\n"
+    printf "  -N                    Disable networking. Defaults to false.\n"
+    printf "                        Set PrivateNetwork to true to\n"
+    printf "                        forbidden the container to access networks.\n"
+    printf "  -d                    Run as daemon. Defaults to false.\n"
+    printf "  -M <machine-name>     Set machine name. Defaults to \"box\".\n"
+    printf "  -b /<src>:/<dst>      Bind read-only mount. Multiple allowed.\n"
+    printf "  -b +/<src>:/<dst>     Bind read-write mount. Multiple allowed.\n"
+    printf "  -i <package>          Install package into the container. Multiple allowed.\n"
+    printf "  -h                    Show help and quit.\n"
 }
 
-while getopts LNdM:h option; do
+while getopts LNdM:b:i:h option; do
     case $option in
         L) ARCHUP_LOCAL=1 ;;
         N) ARCHUP_NO_NETWORK=1 ;;
         d) ARCHUP_DAEMON=1 ;;
         M)
             if [[ -z $OPTARG ]]; then
-                >&2 printf "Machine name cannot be empty."
+                >&2 printf "Machine name cannot be empty.\n"
                 exit 1
             fi
             ARCHUP_MACHINE_NAME="$OPTARG"
+            ;;
+        b)
+            if [[ -z $OPTARG ]]; then
+                >&2 printf "Binding cannot be empty.\n"
+                exit 1
+            fi
+            BINDS+=("$OPTARG")
+            ;;
+        i)
+            if [[ -z $OPTARG ]]; then
+                >&2 printf "Package name cannot be empty.\n"
+                exit 1
+            fi
+            PACKAGES+=("$OPTARG")
             ;;
         h)
             usage
@@ -45,8 +64,9 @@ while getopts LNdM:h option; do
             ;;
     esac
 done
+
 shift $(($OPTIND - 1))
-ARCHUP_PACKAGES="$BASE_PACKAGES $ARCHUP_PACKAGES $*"
+COMMAND="$*"
 
 if ! [[ -x /usr/bin/pacman ]]; then
     printf "This program only works in Arch Linux."
@@ -59,14 +79,9 @@ if ! [[ -x /usr/bin/pacstrap ]]; then
     exit 1
 fi
 
-printf "%s: %s\n" LOCAL "$ARCHUP_LOCAL"
-printf "%s: %s\n" NO_NETWORK "$ARCHUP_NO_NETWORK"
-printf "%s: %s\n" DAEMON "$ARCHUP_DAEMON"
-printf "%s: %s\n" MACHINE_NAME "$ARCHUP_MACHINE_NAME"
-printf "%s: %s\n" PACKAGES "$ARCHUP_PACKAGES"
-
-extra_flags=""
 src="$(realpath .)"
+extra_flags=""
+nspawn_flags=""
 
 if [[ $ARCHUP_LOCAL != 0 ]]; then
     extra_flags="$extra_flags -p BindReadOnlyPaths=$src/mirrorlist:/etc/pacman.d/mirrorlist"
@@ -79,10 +94,36 @@ if [[ $ARCHUP_NO_NETWORK != 0 ]]; then
 fi
 
 if [[ $ARCHUP_DAEMON == 0 ]]; then
-    extra_flags="$extra_flags --tty"
+    extra_flags="$extra_flags --pty"
 fi
 
-printf "flags: %s\n" "$extra_flags"
+for binding in "${BINDS[@]}"; do
+    binding_src="${binding%%:*}"
+    binding_dst="${binding#*:}"
+    if [[ -z ${binding_src%%+*} ]]; then
+        binding_src="${binding_src#+}"
+        extra_flags="$extra_flags -p BindPaths=$binding_src:$binding_dst"
+        nspawn_flags="$nspawn_flags --bind $binding_dst"
+    else
+        extra_flags="$extra_flags -p BindReadOnlyPaths=$binding_src:$binding_dst"
+        nspawn_flags="$nspawn_flags --bind-ro $binding_dst"
+    fi
+done
+
+if [[ -z $COMMAND ]]; then
+    nspawn_flags="$nspawn_flags --boot"
+else
+    nspawn_flags="$nspawn_flags --user archup $COMMAND"
+fi
+
+printf "%s: %s\n" LOCAL "$ARCHUP_LOCAL"
+printf "%s: %s\n" NO_NETWORK "$ARCHUP_NO_NETWORK"
+printf "%s: %s\n" DAEMON "$ARCHUP_DAEMON"
+printf "%s: %s\n" MACHINE_NAME "$ARCHUP_MACHINE_NAME"
+printf "%s: %s\n" PACKAGES "${PACKAGES[*]}"
+printf "%s: %s\n" BINDS "${BINDS[*]}"
+printf "%s: %s\n" EXTRA_FLAGS "$extra_flags"
+printf "%s: %s\n" NSPAWN_FLAGS "$nspawn_flags"
 
 systemd-run \
     --collect \
@@ -97,5 +138,5 @@ systemd-run \
     -p ReadWritePaths=/var/lib/pacman/sync \
     -p ExecStop="/usr/bin/systemctl stop machine-\"$ARCHUP_MACHINE_NAME\".scope" \
     $extra_flags \
-    /usr/bin/bash /opt/archup/setup.sh "$ARCHUP_MACHINE_NAME" $ARCHUP_PACKAGES
+    /usr/bin/bash /opt/archup/setup.sh "$ARCHUP_MACHINE_NAME" "$nspawn_flags" "${PACKAGES[@]}"
 
