@@ -4,6 +4,7 @@
 [[ -z $ARCHUP_DAEMON ]] && ARCHUP_DAEMON=0
 [[ -z $ARCHUP_SYSUPGRADE ]] && ARCHUP_SYSUPGRADE=0
 [[ -z $ARCHUP_DOWNLOAD_TO_CACHE ]] && ARCHUP_DOWNLOAD_TO_CACHE=0
+[[ -z $ARCHUP_USE_ROOT ]] && ARCHUP_USE_ROOT=0
 [[ -z $ARCHUP_MACHINE_NAME ]] && ARCHUP_MACHINE_NAME=box
 PACKAGES=(filesystem shadow bash)
 BINDS=()
@@ -28,6 +29,8 @@ usage()
     printf "                        Human is required even if run as daemon.\n"
     printf "  -w                    Download databases and packages to the cache.\n"
     printf "                        Defaults to false.\n"
+    printf "  -r                    Use root in the container if running <command>.\n"
+    printf "                        Defaults to false.\n"
     printf "  -M <machine-name>     Set machine name. Defaults to \"box\".\n"
     printf "  -b /<src>:/<dst>      Bind read-only mount. Multiple allowed.\n"
     printf "  -b +/<src>:/<dst>     Bind read-write mount. Multiple allowed.\n"
@@ -35,13 +38,14 @@ usage()
     printf "  -h                    Show help and quit.\n"
 }
 
-while getopts LNduwM:b:i:h option; do
+while getopts LNduwrM:b:i:h option; do
     case $option in
         L) ARCHUP_LOCAL=1 ;;
         N) ARCHUP_NO_NETWORK=1 ;;
         d) ARCHUP_DAEMON=1 ;;
         u) ARCHUP_SYSUPGRADE=1 ;;
         w) ARCHUP_DOWNLOAD_TO_CACHE=1 ;;
+        r) ARCHUP_USE_ROOT=1 ;;
         M)
             if [[ -z $OPTARG ]]; then
                 >&2 printf "Machine name cannot be empty.\n"
@@ -126,11 +130,13 @@ for binding in "${BINDS[@]}"; do
     fi
 done
 
+[[ $ARCHUP_USE_ROOT == 0 ]] && USER=archup || USER=root
+
 if [[ -z $COMMAND ]]; then
     PACKAGES+=(systemd polkit)
     nspawn_flags="$nspawn_flags --boot"
 else
-    nspawn_flags="$nspawn_flags --user archup $COMMAND"
+    nspawn_flags="$nspawn_flags --user $USER $COMMAND"
 fi
 
 printf "%s: %s\n" LOCAL "$ARCHUP_LOCAL"
@@ -138,6 +144,7 @@ printf "%s: %s\n" NO_NETWORK "$ARCHUP_NO_NETWORK"
 printf "%s: %s\n" DAEMON "$ARCHUP_DAEMON"
 printf "%s: %s\n" SYSUPGRADE "$ARCHUP_SYSUPGRADE"
 printf "%s: %s\n" DOWNLOAD_TO_CACHE "$ARCHUP_DOWNLOAD_TO_CACHE"
+printf "%s: %s\n" USE_ROOT "$ARCHUP_USE_ROOT"
 printf "%s: %s\n" MACHINE_NAME "$ARCHUP_MACHINE_NAME"
 printf "%s: %s\n" PACKAGES "${PACKAGES[*]}"
 printf "%s: %s\n" BINDS "${BINDS[*]}"
