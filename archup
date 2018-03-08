@@ -5,7 +5,7 @@
 [[ -z $ARCHUP_SYSUPGRADE ]] && ARCHUP_SYSUPGRADE=0
 [[ -z $ARCHUP_DOWNLOAD_TO_CACHE ]] && ARCHUP_DOWNLOAD_TO_CACHE=0
 [[ -z $ARCHUP_MACHINE_NAME ]] && ARCHUP_MACHINE_NAME=box
-PACKAGES=(systemd polkit)
+PACKAGES=(filesystem shadow bash)
 BINDS=()
 
 usage()
@@ -127,6 +127,7 @@ for binding in "${BINDS[@]}"; do
 done
 
 if [[ -z $COMMAND ]]; then
+    PACKAGES+=(systemd polkit)
     nspawn_flags="$nspawn_flags --boot"
 else
     nspawn_flags="$nspawn_flags --user archup $COMMAND"
