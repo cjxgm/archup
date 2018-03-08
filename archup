@@ -54,6 +54,11 @@ while getopts LNduwM:b:i:h option; do
                 >&2 printf "Binding cannot be empty.\n"
                 exit 1
             fi
+            binding_dst="${OPTARG#*:}"
+            if [[ $binding_dst != /* ]]; then
+                >&2 printf "Binding destination must be an absolute path: $binding_dst\n"
+                exit 1
+            fi
             BINDS+=("$OPTARG")
             ;;
         i)
@@ -111,9 +116,11 @@ for binding in "${BINDS[@]}"; do
     binding_dst="${binding#*:}"
     if [[ -z ${binding_src%%+*} ]]; then
         binding_src="${binding_src#+}"
+        binding_src="$(realpath "$binding_src")"
         extra_flags="$extra_flags -p BindPaths=$binding_src:$binding_dst"
         nspawn_flags="$nspawn_flags --bind $binding_dst"
     else
+        binding_src="$(realpath "$binding_src")"
         extra_flags="$extra_flags -p BindReadOnlyPaths=$binding_src:$binding_dst"
         nspawn_flags="$nspawn_flags --bind-ro $binding_dst"
     fi
