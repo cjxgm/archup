@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+cd /usr/lib/archup
+exec /usr/bin/bash archup "$@"
+

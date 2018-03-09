@@ -1,0 +1,26 @@
+# vim: ts=4 sw=4 sts=4 et
+# Maintainer: Giumo Clanjor <cjxgm2@gmail.com>
+pkgname=archup
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Spin up an isolated Arch Linux environment."
+arch=(any)
+license=('GPL3')
+depends=(
+    arch-install-scripts
+)
+source=(
+    archup
+)
+sha512sums=(
+    SKIP
+)
+
+package()
+{
+    install -Dm 755 "$srcdir/archup" "$pkgdir/usr/bin/archup"
+    install -d "$pkgdir/usr/lib/archup"
+
+    cp -r /source/{setup/,archup,mirrorlist,pacman.conf} "$pkgdir/usr/lib/archup"
+}
+
